@@ -1,0 +1,166 @@
+name: '[Reusable] Blob Trigger Pytest'
+
+on:
+  workflow_call:
+    inputs:
+      ACT_MODE:
+        description: |
+          For running Github Action Workflows locally with Nektos act
+        required: true
+        type: boolean
+      markers:
+        description: |
+          PyTest Markers to select specific tests to work within Github Action Workflows
+        required: true
+        type: string
+      working_directory:
+        description: |
+          Working directory containing Terraform test scripts.
+        required: false
+        type: string
+        default: "./test"
+    
+    secrets:
+      AZURE_CLIENT_ID:
+        description: |
+          Azure Service Account Client ID for authentication
+        required: true
+      AZURE_CLIENT_SECRET:
+        description: |
+          Azure Service Account Client Secret for Authentication (when running locally)
+        required: true
+      AZURE_TENANT_ID:
+        description: |
+          Azure Tenant ID
+        required: true
+      TF_API_TOKEN:
+        description: |
+          Terraform.io Access Token
+        required: true
+
+#Special permissions required for OIDC authentication
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform-output:
+    name: Terraform Output
+    runs-on: ubuntu-latest
+    
+    defaults:
+        run:
+          working-directory: ${{ inputs.working_directory }}
+    
+    outputs:
+      INPUT_BUCKET_NAME: "${{ steps.tf-raw.outputs.INPUT_BUCKET_NAME }}"
+      OUTPUT_BUCKET_NAME: "${{ steps.tf-raw.outputs.OUTPUT_BUCKET_NAME }}"
+      FUNCTION_URL: "${{ steps.tf-raw.outputs.FUNCTION_URL }}"
+
+    steps:
+    # Checkout the repository to the GitHub Actions runner
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    # Install the latest version of the Terraform CLI
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+        terraform_wrapper: false
+    
+    - name: terraform init
+      run: terraform init
+
+    - name: terraform raw output
+      id: tf-raw
+      run: |
+        echo "INPUT_BUCKET_NAME=$(terraform output -raw trigger_bucket_name)
+        OUTPUT_BUCKET_NAME=$(terraform output -raw results_bucket_name)
+        FUNCTION_URL=$(terraform output -raw function_url)" >> $GITHUB_OUTPUT
+  
+  terraform-test:
+    name: Terraform Test
+    needs: [ terraform-output ]
+    runs-on: ubuntu-latest
+    env:
+      AZURE_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+      AZURE_CLIENT_SECRET: "${{ secrets.AZURE_CLIENT_SECRET }}"
+      AZURE_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+    
+    defaults:
+      run:
+        working-directory: "${{ inputs.working_directory }}/unit_test"
+    
+    steps:
+      - uses: actions/checkout@v4
+        
+      - name: Setup Python # Set Python version
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      
+      - uses: actions/github-script@v6
+        id: script
+        timeout-minutes: 10
+        with:
+          debug: true
+          script: |
+            const token = process.env['ACTIONS_ID_TOKEN_REQUEST_TOKEN']
+            const runtimeUrl = process.env['ACTIONS_ID_TOKEN_REQUEST_URL']
+            if ( token && runtimeUrl ) {
+              core.setOutput('TOKEN', token.trim())
+              core.setOutput('IDTOKENURL', runtimeUrl.trim())  
+
+              const idtoken = await core.getIDToken('api://AzureADTokenExchange')
+              core.setOutput('IDTOKEN', idtoken)
+            }
+      
+      - id: jwt_token
+        run: |
+          jwtd() {
+              if [[ -x $(command -v jq) ]]; then
+                  jq -R 'split(".") | .[0],.[1] | @base64d | fromjson' <<< "${1}"
+                  echo "Signature: $(echo "${1}" | awk -F'.' '{print $3}')"
+              fi
+          }
+          if ${{ steps.script.outputs.IDTOKEN != '' }}
+          then
+            jwtd "${{ steps.script.outputs.IDTOKEN }}"
+            echo "::add-mask::${{ steps.script.outputs.IDTOKEN }}"
+            echo "OIDC_TOKEN=${{ steps.script.outputs.IDTOKEN }}" >> $GITHUB_ENV
+          fi
+      
+      - name: Outputs Decode
+        id: decode
+        run: |
+          echo "INPUT_BUCKET_NAME=${{ needs.terraform-output.outputs.INPUT_BUCKET_NAME }}
+          OUTPUT_BUCKET_NAME=${{ needs.terraform-output.outputs.OUTPUT_BUCKET_NAME }}" >> $GITHUB_ENV
+      
+      # Install pip and pytest
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest adlfs fsspec uuid azure-identity
+      
+      - name: Wait for Function Availability
+        uses: emilioschepis/wait-for-endpoint@v1.0.3
+        with:
+          url: ${{ needs.terraform-output.outputs.FUNCTION_URL }}
+          method: GET
+          expected-status: 200
+          timeout:  600000
+          interval: 5000
+      
+      - name: Test with pytest
+        run: |
+          pytest -m "${{ inputs.markers }}" \
+            --doctest-modules \
+            --junitxml=junit/test-results.xml
+              
+      - name: Upload pytest test results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: pytest-results
+          path: junit/test-results.xml

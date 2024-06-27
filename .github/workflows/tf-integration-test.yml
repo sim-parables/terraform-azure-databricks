@@ -1,0 +1,199 @@
+name: 'Terraform Integration Test'
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+  workflow_run:
+    workflows: ["README Workflow integration"]
+    types:
+      - completed
+
+jobs:
+  reusable-env-vars:
+    runs-on: ubuntu-latest
+    outputs:
+      TF_VAR_GITHUB_REPOSITORY_OWNER: "${{ steps.env_variables.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
+      TF_VAR_GITHUB_REPOSITORY: "${{ steps.env_variables.outputs.TF_VAR_GITHUB_REPOSITORY }}"
+      TF_VAR_GITHUB_REF: "${{ steps.env_variables.outputs.TF_VAR_GITHUB_REF }}"
+      TF_VAR_GITHUB_ENV: "${{ steps.env_variables.outputs.TF_VAR_GITHUB_ENV }}"
+    steps:
+      - name: Encode Environment Variables
+        id: env_variables
+        env:
+          TF_VAR_GITHUB_REPOSITORY_OWNER: "${{ github.repository_owner }}"
+          TF_VAR_GITHUB_REPOSITORY: "${{ github.repository }}"
+          TF_VAR_GITHUB_REF: "${{ github.ref }}"
+          TF_VAR_GITHUB_ENV: production
+        run: |
+          echo "TF_VAR_GITHUB_REPOSITORY_OWNER=$(echo $TF_VAR_GITHUB_REPOSITORY_OWNER | base64 -w0 | base64 -w0)" >> $GITHUB_OUTPUT
+          echo "TF_VAR_GITHUB_REPOSITORY=$(echo $TF_VAR_GITHUB_REPOSITORY | base64 -w0 | base64 -w0)" >> $GITHUB_OUTPUT
+          echo "TF_VAR_GITHUB_REF=$(echo $TF_VAR_GITHUB_REF | base64 -w0 | base64 -w0)" >> $GITHUB_OUTPUT
+          echo "TF_VAR_GITHUB_ENV=$(echo $TF_VAR_GITHUB_ENV | base64 -w0 | base64 -w0)" >> $GITHUB_OUTPUT
+  
+  terraform-integration-plan-0:
+    needs: [ reusable-env-vars ]
+    uses: sim-parables/github-workflows-reusable/.github/workflows/tf-integration-plan.yml@AzureDatabricksV1
+    secrets:
+      AZURE_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+      AZURE_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+      AZURE_DATABRICKS_ACCOUNT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_ID }}
+      AZURE_DATABRICKS_ACCOUNT_CLIENT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_ID }}
+      AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET }}
+      AZURE_DATABRICKS_ACCOUNT_SCIM_TOKEN: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_SCIM_TOKEN }}
+      env_variables: |
+        TF_VAR_GITHUB_REPOSITORY_OWNER="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
+        TF_VAR_GITHUB_REPOSITORY="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY }}"
+        TF_VAR_GITHUB_REF="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REF }}"
+        TF_VAR_GITHUB_ENV="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_ENV }}"
+    with:
+      ACT_MODE: ${{ !!github.event.act }}
+      DATABRICKS_ADMINISTRATOR: "${{ vars.DATABRICKS_ADMINISTRATOR }}"
+      working_directory: ./test/service_account
+  
+  terraform-integration-plan:
+    if: github.actor != 'github-actions[bot]'
+    needs: [ reusable-env-vars, terraform-integration-plan-0 ]
+    uses: sim-parables/github-workflows-reusable/.github/workflows/tf-integration-plan.yml@AzureDatabricksV1
+    secrets:
+      AZURE_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+      AZURE_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+      AZURE_DATABRICKS_ACCOUNT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_ID }}
+      AZURE_DATABRICKS_ACCOUNT_CLIENT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_ID }}
+      AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET }}
+      env_variables: |
+        TF_VAR_SECURITY_GROUP_ID="00000000-0000-0000-0000-000000000000"
+        TF_VAR_GITHUB_REPOSITORY_OWNER="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
+        TF_VAR_GITHUB_REPOSITORY="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY }}"
+        TF_VAR_GITHUB_REF="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REF }}"
+        TF_VAR_GITHUB_ENV="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_ENV }}"
+    with:
+      ACT_MODE: ${{ !!github.event.act }}
+      DATABRICKS_ADMINISTRATOR: "${{ vars.DATABRICKS_ADMINISTRATOR }}"
+      working_directory: ./test/dataflow
+  
+  terraform-integration-auth:
+    needs: [ reusable-env-vars, terraform-integration-plan ]
+    uses: sim-parables/github-workflows-reusable/.github/workflows/tf-reusable-auth.yml@AzureDatabricksV1
+    secrets:
+      AZURE_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+      AZURE_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+      AZURE_DATABRICKS_ACCOUNT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_ID }}
+      AZURE_DATABRICKS_ACCOUNT_SCIM_TOKEN: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_SCIM_TOKEN }}
+      env_variables: |
+        TF_VAR_GITHUB_REPOSITORY_OWNER="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
+        TF_VAR_GITHUB_REPOSITORY="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY }}"
+        TF_VAR_GITHUB_REF="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REF }}"
+        TF_VAR_GITHUB_ENV="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_ENV }}"
+    with:
+      ACT_MODE: ${{ !!github.event.act }}
+      working_directory: ./test/service_account
+  
+  terraform-integration-auth-decode:
+    needs: [ terraform-integration-auth ]
+    name: Terraform Output
+    runs-on: ubuntu-latest
+
+    outputs:
+      AZURE_CLIENT_ID: ${{ steps.decode.outputs.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ steps.decode.outputs.AZURE_CLIENT_SECRET }}
+    
+    steps:
+      - id: decode
+        run: |
+          echo "::add-mask::$(echo "${{ needs.terraform-integration-auth.outputs.AZURE_CLIENT_SECRET }}" | base64 -di | base64 -di )"
+          if ${{ !!github.event.act }}
+          then
+            echo "AZURE_CLIENT_SECRET=$(echo "${{ needs.terraform-integration-auth.outputs.AZURE_CLIENT_SECRET }}" | base64 -di | base64 -di )" >> $GITHUB_OUTPUT
+          fi
+          echo "AZURE_CLIENT_ID=$(echo "${{ needs.terraform-integration-auth.outputs.AZURE_CLIENT_ID }}" | base64 -di | base64 -di )" >> $GITHUB_OUTPUT
+      
+  terraform-integration-apply:
+    if: github.event.act || github.ref == 'refs/heads/main'
+    needs: [ reusable-env-vars, terraform-integration-auth, terraform-integration-auth-decode ]
+    uses: sim-parables/github-workflows-reusable/.github/workflows/tf-integration-apply.yml@AzureDatabricksV1
+    secrets:
+      AZURE_CLIENT_ID: "${{ needs.terraform-integration-auth-decode.outputs.AZURE_CLIENT_ID }}"
+      AZURE_CLIENT_SECRET: "${{ needs.terraform-integration-auth-decode.outputs.AZURE_CLIENT_SECRET }}"
+      AZURE_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+      AZURE_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+      AZURE_DATABRICKS_ACCOUNT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_ID }}
+      AZURE_DATABRICKS_ACCOUNT_CLIENT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_ID }}
+      AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET }}
+      env_variables: |
+        TF_VAR_SECURITY_GROUP_ID="${{ needs.terraform-integration-auth.outputs.SECURITY_GROUP_ID }}"
+        TF_VAR_GITHUB_REPOSITORY_OWNER="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
+        TF_VAR_GITHUB_REPOSITORY="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY }}"
+        TF_VAR_GITHUB_REF="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REF }}"
+        TF_VAR_GITHUB_ENV="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_ENV }}"
+    with:
+      ACT_MODE: ${{ !!github.event.act }}
+      DATABRICKS_ADMINISTRATOR: "${{ vars.DATABRICKS_ADMINISTRATOR }}"
+      working_directory: ./test/dataflow
+  
+  terraform-integration-test:
+    needs: [ reusable-env-vars, terraform-integration-auth, terraform-integration-auth-decode, terraform-integration-apply ]
+    uses: ./.github/workflows/reusable-test.yml
+    secrets:
+      AZURE_CLIENT_ID: "${{ needs.terraform-integration-auth-decode.outputs.AZURE_CLIENT_ID }}"
+      AZURE_CLIENT_SECRET: "${{ needs.terraform-integration-auth-decode.outputs.AZURE_CLIENT_SECRET }}"
+      AZURE_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+    with:
+      ACT_MODE: ${{ !!github.event.act }}
+      working_directory: ./test/dataflow
+      markers: ${{ !!github.event.act && 'github and client_credentials' || 'github and oidc'}}
+
+  terraform-integration-destroy-0:
+    needs: [ reusable-env-vars, terraform-integration-auth, terraform-integration-auth-decode, terraform-integration-test ]
+    uses: sim-parables/github-workflows-reusable/.github/workflows/tf-integration-destroy.yml@AzureDatabricksV1
+    secrets:
+      AZURE_CLIENT_ID: "${{ needs.terraform-integration-auth-decode.outputs.AZURE_CLIENT_ID }}"
+      AZURE_CLIENT_SECRET: "${{ needs.terraform-integration-auth-decode.outputs.AZURE_CLIENT_SECRET }}"
+      AZURE_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+      AZURE_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+      AZURE_DATABRICKS_ACCOUNT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_ID }}
+      AZURE_DATABRICKS_ACCOUNT_CLIENT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_ID }}
+      AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET }}
+      env_variables: |
+        TF_VAR_SECURITY_GROUP_ID="${{ needs.terraform-integration-auth.outputs.SECURITY_GROUP_ID }}"
+        TF_VAR_GITHUB_REPOSITORY_OWNER="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
+        TF_VAR_GITHUB_REPOSITORY="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY }}"
+        TF_VAR_GITHUB_REF="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REF }}"
+        TF_VAR_GITHUB_ENV="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_ENV }}"
+    with:
+      ACT_MODE: ${{ !!github.event.act }}
+      working_directory: ./test/dataflow    
+  
+  terraform-integration-destroy:
+    if: always()
+    needs: [ reusable-env-vars, terraform-integration-destroy-0 ]
+    uses: sim-parables/github-workflows-reusable/.github/workflows/tf-integration-destroy.yml@AzureV1
+    secrets:
+      AZURE_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+      AZURE_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+      TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+      env_variables: |
+        TF_VAR_GITHUB_REPOSITORY_OWNER="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
+        TF_VAR_GITHUB_REPOSITORY="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY }}"
+        TF_VAR_GITHUB_REF="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REF }}"
+        TF_VAR_GITHUB_ENV="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_ENV }}"
+    with:
+      ACT_MODE: ${{ !!github.event.act }}
+      working_directory: ./test/service_account

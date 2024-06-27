@@ -1,0 +1,8 @@
+application_display_name = "example-databricks-service-account"
+role_name                = "example-databricks-service-account-role"
+security_group_name      = "example-databricks-group"
+azure_region             = "East US"
+GITHUB_REPOSITORY_OWNER  = "sim-parables"
+GITHUB_REPOSITORY        = "sim-parables/terraform-azure-databricks"
+GITHUB_REF               = "refs/heads/main"
+GITHUB_ENV               = "production"

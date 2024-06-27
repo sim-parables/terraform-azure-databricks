@@ -1,0 +1,4 @@
+test/service_account/.terraform/*
+test/service_account/.terraform.lock.hcl
+test/databricks/.terraform/*
+test/databricks/.terraform.lock.hcl
