@@ -1,7 +1,7 @@
 <p float="left">
   <img id="b-0" src="https://img.shields.io/badge/terraform-%235835CC.svg?style=for-the-badge&logo=terraform&logoColor=white" height="25px"/>
   <img id="b-1" src="https://img.shields.io/badge/Microsoft_Azure-0089D6?style=for-the-badge&logo=microsoft-azure&logoColor=white" height="25px"/>
-  <img id="b-2" src="https://img.shields.io/github/actions/workflow/status/sim-parables/terraform-azure-databricks/tf-integration-test.yml?style=flat&logo=github&label=CD%20(July%202024)" height="25px"/>
+  <img id="b-2" src="https://img.shields.io/github/actions/workflow/status/sim-parables/terraform-azure-databricks/tf-integration-test.yml?style=flat&logo=github&label=CD%20(August%202024)" height="25px"/>
 </p>
 
 # Terraform Azure Databricks Workspace & Unity Catalog Module
