@@ -18,6 +18,7 @@ jobs:
   reusable-env-vars:
     runs-on: ubuntu-latest
     outputs:
+      TF_VAR_DATABRICKS_ADMINISTRATOR: "${{ steps.env_variables.outputs.TF_VAR_DATABRICKS_ADMINISTRATOR }}"
       TF_VAR_GITHUB_REPOSITORY_OWNER: "${{ steps.env_variables.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
       TF_VAR_GITHUB_REPOSITORY: "${{ steps.env_variables.outputs.TF_VAR_GITHUB_REPOSITORY }}"
       TF_VAR_GITHUB_REF: "${{ steps.env_variables.outputs.TF_VAR_GITHUB_REF }}"
@@ -31,6 +32,7 @@ jobs:
           TF_VAR_GITHUB_REF: "${{ github.ref }}"
           TF_VAR_GITHUB_ENV: production
         run: |
+          echo "TF_VAR_DATABRICKS_ADMINISTRATOR=$(echo ${{ vars.DATABRICKS_ADMINISTRATOR }} | base64 -w0 | base64 -w0)" >> $GITHUB_OUTPUT
           echo "TF_VAR_GITHUB_REPOSITORY_OWNER=$(echo $TF_VAR_GITHUB_REPOSITORY_OWNER | base64 -w0 | base64 -w0)" >> $GITHUB_OUTPUT
           echo "TF_VAR_GITHUB_REPOSITORY=$(echo $TF_VAR_GITHUB_REPOSITORY | base64 -w0 | base64 -w0)" >> $GITHUB_OUTPUT
           echo "TF_VAR_GITHUB_REF=$(echo $TF_VAR_GITHUB_REF | base64 -w0 | base64 -w0)" >> $GITHUB_OUTPUT
@@ -73,11 +75,12 @@ jobs:
       AZURE_DATABRICKS_ACCOUNT_CLIENT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_ID }}
       AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET }}
       env_variables: |
-        TF_VAR_SECURITY_GROUP_ID="00000000-0000-0000-0000-000000000000"
+        TF_VAR_SECURITY_GROUP_ID="TURBd01EQXdNREF0TURBd01DMHdNREF3TFRBd01EQXRNREF3TURBd01EQXdNREF3"
         TF_VAR_GITHUB_REPOSITORY_OWNER="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
         TF_VAR_GITHUB_REPOSITORY="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY }}"
         TF_VAR_GITHUB_REF="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REF }}"
         TF_VAR_GITHUB_ENV="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_ENV }}"
+        TF_VAR_DATABRICKS_CLUSTERS="TVE9PQ=="
     with:
       ACT_MODE: ${{ !!github.event.act }}
       DATABRICKS_ADMINISTRATOR: "${{ vars.DATABRICKS_ADMINISTRATOR }}"
@@ -137,11 +140,12 @@ jobs:
       AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET }}
       env_variables: |
         TF_VAR_SECURITY_GROUP_ID="${{ needs.terraform-dispatch-auth.outputs.SECURITY_GROUP_ID }}"
-        TF_VAR_DATABRICKS_ADMINISTRATOR="${{ vars.ADMINISTRATOR_EMAIL }}"
+        TF_VAR_DATABRICKS_ADMINISTRATOR="${{ needs.reusable-env-vars.outputs.TF_VAR_DATABRICKS_ADMINISTRATOR }}"
         TF_VAR_GITHUB_REPOSITORY_OWNER="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
         TF_VAR_GITHUB_REPOSITORY="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY }}"
         TF_VAR_GITHUB_REF="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REF }}"
         TF_VAR_GITHUB_ENV="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_ENV }}"
+        TF_VAR_DATABRICKS_CLUSTERS="TVE9PQ=="
     with:
       ACT_MODE: ${{ !!github.event.act }}
       DATABRICKS_ADMINISTRATOR: "${{ vars.DATABRICKS_ADMINISTRATOR }}"
@@ -150,7 +154,7 @@ jobs:
   terraform-dispatch-test:
     if: ${{ github.event.act || github.event.inputs.terraform_operation == 'test' }}
     needs: [ reusable-env-vars, terraform-dispatch-auth, terraform-dispatch-auth-decode ]
-    uses: .github/workflows/reusable-test.yml
+    uses: ./.github/workflows/reusable-test.yml
     secrets:
       AZURE_CLIENT_ID: "${{ needs.terraform-dispatch-auth-decode.outputs.AZURE_CLIENT_ID }}"
       AZURE_CLIENT_SECRET: "${{ needs.terraform-dispatch-auth-decode.outputs.AZURE_CLIENT_SECRET }}"
@@ -174,25 +178,29 @@ jobs:
       AZURE_DATABRICKS_ACCOUNT_CLIENT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_ID }}
       AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_CLIENT_SECRET }}
       env_variables: |
-        TF_VAR_SECURITY_GROUP_ID="${{ needs.terraform-dispatch-auth.outputs.TF_VAR_SECURITY_GROUP_ID }}"
+        TF_VAR_SECURITY_GROUP_ID="${{ needs.terraform-dispatch-auth.outputs.SECURITY_GROUP_ID }}"
         TF_VAR_GITHUB_REPOSITORY_OWNER="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
         TF_VAR_GITHUB_REPOSITORY="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY }}"
         TF_VAR_GITHUB_REF="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REF }}"
         TF_VAR_GITHUB_ENV="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_ENV }}"
     with:
       ACT_MODE: ${{ !!github.event.act }}
+      DATABRICKS_ADMINISTRATOR: "${{ vars.DATABRICKS_ADMINISTRATOR }}"
       working_directory: ./test/databricks
+      #state_remove: "module.databricks_workspace_config.module.databricks_cluster"
 
   terraform-dispatch-destroy:
     if: ${{ github.event.act ||github.event.inputs.terraform_operation == 'destroy' }}
     needs: [ reusable-env-vars, terraform-dispatch-destroy-0 ]
-    uses: sim-parables/github-workflows-reusable/.github/workflows/tf-dispatch-destroy.yml@AzureV1
+    uses: sim-parables/github-workflows-reusable/.github/workflows/tf-dispatch-destroy.yml@AzureDatabricksV1
     secrets:
       AZURE_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       AZURE_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
       AZURE_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
       TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+      AZURE_DATABRICKS_ACCOUNT_ID: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_ID }}
+      AZURE_DATABRICKS_ACCOUNT_SCIM_TOKEN: ${{ secrets.AZURE_DATABRICKS_ACCOUNT_SCIM_TOKEN }}
       env_variables: |
         TF_VAR_GITHUB_REPOSITORY_OWNER="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY_OWNER }}"
         TF_VAR_GITHUB_REPOSITORY="${{ needs.reusable-env-vars.outputs.TF_VAR_GITHUB_REPOSITORY }}"

@@ -15,6 +15,7 @@ terraform {
   }
 }
 
+
 ## ---------------------------------------------------------------------------------------------------------------------
 ## AZURERM_RESOURCE_GROUP DATA
 ##
@@ -107,7 +108,7 @@ module "metastore_bucket" {
 ## - `databricks.accounts`: The Databricks provider.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_metastore" {
-  source   = "github.com/sim-parables/terraform-databricks//modules/databricks_metastore?ref=e08a6fb2e91c019d8f082002e7f40f0fdfe61e28"
+  source   = "github.com/sim-parables/terraform-databricks//modules/databricks_metastore?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
 
   databricks_metastore_name    = var.databricks_storage_name
   databricks_unity_admin_group = var.databricks_admin_group
@@ -183,7 +184,7 @@ resource "time_sleep" "grant_propogation" {
 ## - `databricks_catalog_grants`: List of Databricks Catalog roles mappings to grant to specific principal.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_external_location" {
-  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_external_location?ref=e08a6fb2e91c019d8f082002e7f40f0fdfe61e28"
+  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_external_location?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
   depends_on = [
     databricks_storage_credential.this,
     module.databricks_metastore,
@@ -194,6 +195,7 @@ module "databricks_external_location" {
   databricks_external_storage_url   = "abfss://${var.azure_container_name}@${module.metastore_bucket.bucket_name}.dfs.core.windows.net"
   databricks_storage_credential_id  = databricks_storage_credential.this.id
   databricks_catalog_grants         = var.databricks_catalog_grants
+  databricks_catalog_name           = var.databricks_catalog_name
 
   providers = {
     databricks.workspace = databricks.workspace

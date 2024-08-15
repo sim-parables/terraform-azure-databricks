@@ -72,6 +72,12 @@ variable "azure_container_name" {
   default     = "metastore"
 }
 
+variable "databricks_catalog_name" {
+  type        = string
+  description = "Databricks Catalog Name"
+  default     = "sandbox"
+}
+
 variable "tags" {
   description = "Azure Resource Tag(s)"
   default     = {}

@@ -29,10 +29,28 @@ variable "DATABRICKS_CLI_PROFILE" {
   default     = "AZURE_ACCOUNTS"
 }
 
+variable "DATABRICKS_CLUSTERS" {
+  type        = number
+  description = "Number representing the amount of Databricks Clusters to spin up"
+  default     = 0
+}
+
+variable "databricks_workspace_name" {
+  type        = string
+  description = "Databricks Workspace Name"
+  default     = "example-databricks-workspace"
+}
+
+variable "databricks_workspace_sku" {
+  type        = string
+  description = "Databricks Workspace Sku Type"
+  default     = "premium"
+}
+
 variable "databricks_cluster_data_security_mode" {
   type        = string
-  description = "Databricks Unity Catalog Feature to secure access/isolation. (Default: NONE)"
-  default     = "NONE"
+  description = "Databricks Unity Catalog Feature to secure access/isolation. (Default: USER_ISOLATION)"
+  default     = "USER_ISOLATION"
 }
 
 variable "databricks_instance_pool_node_max_capacity" {
@@ -51,10 +69,4 @@ variable "tags" {
   type        = map(string)
   description = "Azure Resource Tag(s)"
   default     = {}
-}
-
-variable "client_secret_expiration" {
-  type        = string
-  description = "Service Account Secret Relative Expiration from Creation"
-  default     = "1h"
 }

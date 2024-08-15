@@ -2,3 +2,8 @@ test/service_account/.terraform/*
 test/service_account/.terraform.lock.hcl
 test/databricks/.terraform/*
 test/databricks/.terraform.lock.hcl
+
+\.pytest_cache
+.terraform.lock.hcl
+.terraform/providers/registry.terraform.io/hashicorp/azurerm/3.113.0/linux_amd64/terraform-provider-azurerm_v3.113.0_x5
+.terraform/*

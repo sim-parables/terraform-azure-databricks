@@ -1,4 +1,4 @@
-name: '[Reusable] Blob Trigger Pytest'
+name: '[Reusable] Databricks Workspace Test Suit Workflow'
 
 on:
   workflow_call:
@@ -8,6 +8,30 @@ on:
           For running Github Action Workflows locally with Nektos act
         required: true
         type: boolean
+      DATABRICKS_PROFILE:
+        description: |
+          Databricks CLI configuration profile name for Databricks Accounts configuration/credentials
+        required: false
+        type: string
+        default: AZURE_WORKSPACE
+      DATABRICKS_ADMINISTRATOR:
+        description: |
+          Databricks Accounts and Workspace administrator email
+        required: false
+        type: string
+        default: jason.grein@gmail.com
+      DATABRICKS_ASSET_BUNDLE_URL:
+        description: |
+          Databricks Asset Bundle Template Git URL
+        required: false
+        type: string
+        default: https://github.com/sim-parables/databricks-xcloud-asset-bundle-template
+      DATABRICKS_ASSET_BUNDLE_PROJECT_NAME:
+        description: |
+          Databricks Asset Bundle project name configured with DAB template
+        required: false
+        type: string
+        default: sim_parables_dab_example
       markers:
         description: |
           PyTest Markers to select specific tests to work within Github Action Workflows
@@ -47,16 +71,22 @@ jobs:
   terraform-output:
     name: Terraform Output
     runs-on: ubuntu-latest
-    
+
+    outputs:
+      DATABRICKS_WORKSPACE_HOST: ${{ steps.tf-raw.outputs.DATABRICKS_WORKSPACE_HOST }}
+      DATABRICKS_CLUSTER_ID: ${{ steps.tf-raw.outputs.DATABRICKS_CLUSTER_ID }}
+      DATABRICKS_ACCESS_TOKEN: ${{ steps.tf-raw.outputs.DATABRICKS_ACCESS_TOKEN}}
+      SERVICE_ACCOUNT_KEY_NAME: ${{ steps.tf-raw.outputs.SERVICE_ACCOUNT_KEY_NAME }}
+      SERVICE_ACCOUNT_KEY_SECRET: ${{ steps.tf-raw.outputs.SERVICE_ACCOUNT_KEY_SECRET }}
+      OUTPUT_DIR: ${{ steps.tf-raw.outputs.OUTPUT_DIR }}
+      OUTPUT_TABLE: ${{ steps.tf-raw.outputs.OUTPUT_TABLE }}
+      EXAMPLE_HOLDING_FILE_PATH: ${{ steps.tf-raw.outputs.EXAMPLE_HOLDING_FILE_PATH }}
+      EXAMPLE_WEATHER_FILE_PATH: ${{ steps.tf-raw.outputs.EXAMPLE_WEATHER_FILE_PATH }}
+
     defaults:
         run:
           working-directory: ${{ inputs.working_directory }}
     
-    outputs:
-      INPUT_BUCKET_NAME: "${{ steps.tf-raw.outputs.INPUT_BUCKET_NAME }}"
-      OUTPUT_BUCKET_NAME: "${{ steps.tf-raw.outputs.OUTPUT_BUCKET_NAME }}"
-      FUNCTION_URL: "${{ steps.tf-raw.outputs.FUNCTION_URL }}"
-
     steps:
     # Checkout the repository to the GitHub Actions runner
     - name: Checkout
@@ -75,92 +105,133 @@ jobs:
     - name: terraform raw output
       id: tf-raw
       run: |
-        echo "INPUT_BUCKET_NAME=$(terraform output -raw trigger_bucket_name)
-        OUTPUT_BUCKET_NAME=$(terraform output -raw results_bucket_name)
-        FUNCTION_URL=$(terraform output -raw function_url)" >> $GITHUB_OUTPUT
+        echo "DATABRICKS_WORKSPACE_HOST=$(terraform output -raw databricks_workspace_host)
+        DATABRICKS_CLUSTER_ID=$(terraform output -json databricks_cluster_ids | jq -r '.[0]')
+        SERVICE_ACCOUNT_KEY_NAME=$(terraform output -raw azure_keyvault_secret_client_id_name)
+        SERVICE_ACCOUNT_KEY_SECRET=$(terraform output -raw azure_keyvault_secret_client_secret_name)
+        OUTPUT_DIR=$(terraform output -raw databricks_external_location_url)
+        OUTPUT_TABLE=$(terraform output -json databricks_unity_catalog_table_paths | jq -r '.[0]')
+        EXAMPLE_HOLDING_FILE_PATH=$(terraform output -raw databricks_example_holdings_data_path)
+        EXAMPLE_WEATHER_FILE_PATH=$(terraform output -raw databricks_example_weather_data_path)" >> $GITHUB_OUTPUT
   
-  terraform-test:
-    name: Terraform Test
+  databricks-deploy:
+    name: Databricks DAB Deploy
     needs: [ terraform-output ]
     runs-on: ubuntu-latest
-    env:
-      AZURE_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
-      AZURE_CLIENT_SECRET: "${{ secrets.AZURE_CLIENT_SECRET }}"
-      AZURE_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
     
     defaults:
       run:
-        working-directory: "${{ inputs.working_directory }}/unit_test"
+        working-directory: "${{ inputs.working_directory }}"
     
     steps:
       - uses: actions/checkout@v4
         
-      - name: Setup Python # Set Python version
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
+      - name: Setup Databricks CLI
+        uses: databricks/setup-cli@main
       
-      - uses: actions/github-script@v6
-        id: script
-        timeout-minutes: 10
-        with:
-          debug: true
-          script: |
-            const token = process.env['ACTIONS_ID_TOKEN_REQUEST_TOKEN']
-            const runtimeUrl = process.env['ACTIONS_ID_TOKEN_REQUEST_URL']
-            if ( token && runtimeUrl ) {
-              core.setOutput('TOKEN', token.trim())
-              core.setOutput('IDTOKENURL', runtimeUrl.trim())  
+      - name: Databricks Accounts Configuration
+        run: |
+          echo "[${{ inputs.DATABRICKS_PROFILE }}]
+          host                = ${{ needs.terraform-output.outputs.DATABRICKS_WORKSPACE_HOST }}
+          azure_tenant_id     = ${{ secrets.AZURE_TENANT_ID }}
+          azure_client_id     = ${{ secrets.AZURE_CLIENT_ID }}
+          azure_client_secret = ${{ secrets.AZURE_CLIENT_SECRET }}
+          jobs-api-version    = 2.1" > /root/.databrickscfg
+      
+      # Initialize Databricks Asset Bundle
+      # DO NOT user hyphens "-" in project name - will cause package namespace to be broken in Python
+      - name: Build Databricks Asset Bundle Config File
+        run: |
+          echo "{
+            \"project_name\": \"${{ inputs.DATABRICKS_ASSET_BUNDLE_PROJECT_NAME }}\",
+            \"distribution_list\": \"${{ inputs.DATABRICKS_ADMINISTRATOR }}\",
+            \"databricks_cli_profile\": \"${{ inputs.DATABRICKS_PROFILE }}\",
+            \"databricks_cloud_provider\": \"AZURE\",
+            \"databricks_service_account_key_name\": \"${{ needs.terraform-output.outputs.SERVICE_ACCOUNT_KEY_NAME }}\",
+            \"databricks_service_account_key_secret\": \"${{ needs.terraform-output.outputs.SERVICE_ACCOUNT_KEY_SECRET }}\"
+          }" > databricks_dab_template_config
+      
+      - name: Build & Deploy Databricks Asset Bundle
+        run: |
+          export DATABRICKS_CONFIG_FILE=/root/.databrickscfg && \
+          databricks bundle init ${{ inputs.DATABRICKS_ASSET_BUNDLE_URL }} \
+            --output-dir=dab_solution \
+            --config-file=databricks_dab_template_config \
+            --profile=${{ inputs.DATABRICKS_PROFILE }}
+          
+          cd dab_solution
+          databricks bundle deploy \
+          --var="databricks_cluster_id=${{ needs.terraform-output.outputs.DATABRICKS_CLUSTER_ID }},csv_holdings_path=${{ needs.terraform-output.outputs.EXAMPLE_HOLDING_FILE_PATH }},csv_weather_path=${{ needs.terraform-output.outputs.EXAMPLE_WEATHER_FILE_PATH }},output_path=${{ needs.terraform-output.outputs.OUTPUT_DIR }},output_table=${{ needs.terraform-output.outputs.OUTPUT_TABLE }}" \
+          --profile=${{ inputs.DATABRICKS_PROFILE }}
+        
+          databricks bundle run ${{ inputs.DATABRICKS_ASSET_BUNDLE_PROJECT_NAME }}_example_output \
+          --profile=${{ inputs.DATABRICKS_PROFILE }} \
+          --var="databricks_cluster_id=${{ needs.terraform-output.outputs.DATABRICKS_CLUSTER_ID }},csv_holdings_path=${{ needs.terraform-output.outputs.EXAMPLE_HOLDING_FILE_PATH }},csv_weather_path=${{ needs.terraform-output.outputs.EXAMPLE_WEATHER_FILE_PATH }},output_path=${{ needs.terraform-output.outputs.OUTPUT_DIR }},output_table=${{ needs.terraform-output.outputs.OUTPUT_TABLE }}"
 
-              const idtoken = await core.getIDToken('api://AzureADTokenExchange')
-              core.setOutput('IDTOKEN', idtoken)
-            }
-      
-      - id: jwt_token
-        run: |
-          jwtd() {
-              if [[ -x $(command -v jq) ]]; then
-                  jq -R 'split(".") | .[0],.[1] | @base64d | fromjson' <<< "${1}"
-                  echo "Signature: $(echo "${1}" | awk -F'.' '{print $3}')"
-              fi
-          }
-          if ${{ steps.script.outputs.IDTOKEN != '' }}
-          then
-            jwtd "${{ steps.script.outputs.IDTOKEN }}"
-            echo "::add-mask::${{ steps.script.outputs.IDTOKEN }}"
-            echo "OIDC_TOKEN=${{ steps.script.outputs.IDTOKEN }}" >> $GITHUB_ENV
-          fi
-      
-      - name: Outputs Decode
-        id: decode
-        run: |
-          echo "INPUT_BUCKET_NAME=${{ needs.terraform-output.outputs.INPUT_BUCKET_NAME }}
-          OUTPUT_BUCKET_NAME=${{ needs.terraform-output.outputs.OUTPUT_BUCKET_NAME }}" >> $GITHUB_ENV
-      
-      # Install pip and pytest
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest adlfs fsspec uuid azure-identity
-      
-      - name: Wait for Function Availability
-        uses: emilioschepis/wait-for-endpoint@v1.0.3
-        with:
-          url: ${{ needs.terraform-output.outputs.FUNCTION_URL }}
-          method: GET
-          expected-status: 200
-          timeout:  600000
-          interval: 5000
-      
-      - name: Test with pytest
-        run: |
-          pytest -m "${{ inputs.markers }}" \
-            --doctest-modules \
-            --junitxml=junit/test-results.xml
-              
-      - name: Upload pytest test results
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: pytest-results
-          path: junit/test-results.xml
+          databricks bundle run ${{ inputs.DATABRICKS_ASSET_BUNDLE_PROJECT_NAME }}_example_output_uc \
+          --profile=${{ inputs.DATABRICKS_PROFILE }} \
+          --var="databricks_cluster_id=${{ needs.terraform-output.outputs.DATABRICKS_CLUSTER_ID }},csv_holdings_path=${{ needs.terraform-output.outputs.EXAMPLE_HOLDING_FILE_PATH }},csv_weather_path=${{ needs.terraform-output.outputs.EXAMPLE_WEATHER_FILE_PATH }},output_path=${{ needs.terraform-output.outputs.OUTPUT_DIR }},output_table=${{ needs.terraform-output.outputs.OUTPUT_TABLE }}"
+
+# ANNEX
+# CLI configuration clash similar to below issue causing job runs to fail.
+# Waiting for fix to run tests more optimally.
+#
+# https://github.com/databricks/cli/issues/1358
+#
+#      # Tar required to retain permissions/ executables
+#      - name: Compress Databricks Asset Bundle
+#        run: tar -C dab_solution -cvf dab_solution.tar ./
+#      
+#      # Save DAB to artifacts
+#      - name: Publish Databricks Asset Bundle Build
+#        id: dab-upload
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: dab_solution
+#          path: dab_solution.tar
+#
+#
+#  databricks-test:
+#    name: Databricks DAB Run
+#    needs: [ terraform-output, databricks-deploy ]
+#    runs-on: ubuntu-latest
+#    
+#    strategy:
+#      matrix:
+#        job: [
+#          "${{ inputs.DATABRICKS_ASSET_BUNDLE_PROJECT_NAME }}_example_unit_test",
+#          "${{ inputs.DATABRICKS_ASSET_BUNDLE_PROJECT_NAME }}_example_integration_test",
+#          "${{ inputs.DATABRICKS_ASSET_BUNDLE_PROJECT_NAME }}_example_output",
+#          "${{ inputs.DATABRICKS_ASSET_BUNDLE_PROJECT_NAME }}_example_output_uc",
+#        ]
+#    
+#    steps:
+#      - name: Setup Databricks CLI
+#        uses: databricks/setup-cli@main
+#
+#      # Download DAB from artifacts
+#      # Automatically uncompresses tar
+#      - name: Download Databricks Asset Bundles Compressed Tarball
+#        id: dab-download
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: dab_solution
+#          path: ./dab_solution
+#      
+#      - name: Databricks Accounts Configuration
+#        run: |
+#          echo "[${{ inputs.DATABRICKS_PROFILE }}]
+#          host                = ${{ needs.terraform-output.outputs.DATABRICKS_WORKSPACE_HOST }}
+#          azure_tenant_id     = ${{ secrets.AZURE_TENANT_ID }}
+#          azure_client_id     = ${{ secrets.AZURE_CLIENT_ID }}
+#          azure_client_secret = ${{ secrets.AZURE_CLIENT_SECRET }}
+#          jobs-api-version    = 2.1" > /root/.databrickscfg
+#      
+#      - name: Deploy and Run Databricks Asset Bundle Test Suit
+#        id: db-deploy
+#        working-directory: ${{ steps.dab-download.outputs.download-path }}
+#        run: |
+#          export DATABRICKS_CONFIG_FILE=/root/.databrickscfg && \
+#          databricks bundle run ${{ matrix.job }} \
+#          --profile=${{ inputs.DATABRICKS_PROFILE }} \
+#          --var="databricks_cluster_id=${{ needs.terraform-output.outputs.DATABRICKS_CLUSTER_ID }},csv_holdings_path=${{ needs.terraform-output.outputs.EXAMPLE_HOLDING_FILE_PATH }},csv_weather_path=${{ needs.terraform-output.outputs.EXAMPLE_WEATHER_FILE_PATH }},output_path=${{ needs.terraform-output.outputs.OUTPUT_DIR }},output_table=${{ needs.terraform-output.outputs.OUTPUT_TABLE }}"

@@ -63,7 +63,7 @@ data "azurerm_client_config" "current" {
 ## ---------------------------------------------------------------------------------------------------------------------
 resource "azurerm_key_vault" "this" {
   provider                   = azurerm.auth_session
-  name                       = substr(var.key_vault_name, 0, 24)
+  name                       = substr("akv-${var.key_vault_name}", 0, 24)
   location                   = var.resource_group_location
   resource_group_name        = var.resource_group_name
   tenant_id                  = data.azurerm_client_config.current.tenant_id
@@ -82,7 +82,7 @@ resource "azurerm_key_vault" "this" {
   }
 
   timeouts {
-    delete = "1m"
+    delete = "2m"
   }
 }
 
