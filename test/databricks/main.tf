@@ -230,7 +230,7 @@ provider "databricks" {
 ## - `databricks_cluster_azure_attributes`: Map of Azure Compute Configurations for Databricks Clusters.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_workspace_config" {
-  source   = "github.com/sim-parables/terraform-databricks?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
+  source   = "github.com/sim-parables/terraform-databricks?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
   depends_on = [ module.databricks_workspace ]
   
   DATABRICKS_CLUSTERS                      = var.DATABRICKS_CLUSTERS

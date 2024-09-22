@@ -187,7 +187,7 @@ jobs:
       ACT_MODE: ${{ !!github.event.act }}
       DATABRICKS_ADMINISTRATOR: "${{ vars.DATABRICKS_ADMINISTRATOR }}"
       working_directory: ./test/databricks
-      #state_remove: "module.databricks_workspace_config.module.databricks_cluster"
+      state_remove: "module.databricks_workspace_config.module.databricks_cluster"
 
   terraform-dispatch-destroy:
     if: ${{ github.event.act ||github.event.inputs.terraform_operation == 'destroy' }}

@@ -108,7 +108,7 @@ module "metastore_bucket" {
 ## - `databricks.accounts`: The Databricks provider.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_metastore" {
-  source   = "github.com/sim-parables/terraform-databricks//modules/databricks_metastore?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
+  source   = "github.com/sim-parables/terraform-databricks//modules/databricks_metastore?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
 
   databricks_metastore_name    = var.databricks_storage_name
   databricks_unity_admin_group = var.databricks_admin_group
@@ -184,7 +184,7 @@ resource "time_sleep" "grant_propogation" {
 ## - `databricks_catalog_grants`: List of Databricks Catalog roles mappings to grant to specific principal.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_external_location" {
-  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_external_location?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
+  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_external_location?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
   depends_on = [
     databricks_storage_credential.this,
     module.databricks_metastore,

@@ -267,7 +267,7 @@ data "databricks_user" "this" {
 ## - `member_ids`: List of Databricks member IDs to assign into the group.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_admin_group" {
-  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_group?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
+  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_group?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
   depends_on = [ databricks_service_principal_role.this ]
   
   group_name                  = "${var.databricks_group_prefix}-admin"
@@ -298,7 +298,7 @@ module "databricks_admin_group" {
 ## - `databricks.workspace`: The Databricks provider for managing workspace resources.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_user_group" {
-  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_group?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
+  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_group?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
   depends_on = [ databricks_service_principal_role.this ]
   
   group_name                  = "${var.databricks_group_prefix}-user"
@@ -359,7 +359,7 @@ module "databricks_metastore" {
 ## - `secret_scope`: Specifies the name of Databricks Secret Scope.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_secret_scope" {
-  source   = "github.com/sim-parables/terraform-databricks//modules/databricks_secret_scope?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
+  source   = "github.com/sim-parables/terraform-databricks//modules/databricks_secret_scope?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
   depends_on   = [ azurerm_databricks_workspace.this ]
 
   secret_scope = var.databricks_secret_scope_name
@@ -382,7 +382,7 @@ module "databricks_secret_scope" {
 ## - `secret_data`: Specifies the data of the secret (client ID of the Azure service principal)
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_service_account_key_name_secret" {
-  source      = "github.com/sim-parables/terraform-databricks//modules/databricks_secret?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
+  source      = "github.com/sim-parables/terraform-databricks//modules/databricks_secret?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
   depends_on  = [ module.databricks_secret_scope ]
   
   secret_scope_id = module.databricks_secret_scope.databricks_secret_scope_id
@@ -407,7 +407,7 @@ module "databricks_service_account_key_name_secret" {
 ## - `secret_data`: Specifies the data of the secret (client Secret of the Azure service principal)
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_service_account_key_data_secret" {
-  source       = "github.com/sim-parables/terraform-databricks//modules/databricks_secret?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
+  source       = "github.com/sim-parables/terraform-databricks//modules/databricks_secret?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
   depends_on   = [ module.databricks_secret_scope ]
   
   secret_scope_id = module.databricks_secret_scope.databricks_secret_scope_id
